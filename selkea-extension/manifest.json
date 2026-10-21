@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Selkeä – accessibility for any website",
+  "version": "0.1.0",
+  "description": "Tell Selkeä who you are and what you need. An open-weight LLM rewrites the page's HTML and CSS so it works for you.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Selkeä",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "http://86.50.168.167/*",
+    "https://aitta-api.csc.fi/*"
+  ],
+  "optional_host_permissions": ["http://*/*", "https://*/*"]
+}

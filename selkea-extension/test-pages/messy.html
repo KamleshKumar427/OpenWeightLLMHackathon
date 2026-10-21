@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kaupungin palvelut – demo page with many accessibility problems</title>
+<style>
+  body { margin: 0; font-family: Georgia, serif; font-size: 13px; background: #f4efe6; color: #8a8a8a; }
+  .top { background: #2b7a78; padding: 10px 24px; display: flex; gap: 18px; align-items: center; }
+  .top a { color: #7fc4c2; text-decoration: none; font-size: 12px; }
+  .logo { width: 90px; height: 26px; background: #17252a; }
+  .hero { background: linear-gradient(90deg, #ffd166, #ef476f); padding: 40px 24px; }
+  .hero h1 { margin: 0; color: #ffe8a3; font-size: 34px; }
+  .wrap { display: flex; gap: 24px; padding: 24px; }
+  .content { flex: 1; text-align: justify; font-style: italic; }
+  .side { width: 200px; }
+  .ad { background: #ff6b6b; color: #ffb3b3; padding: 20px; margin-bottom: 14px; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .btn { display: inline-block; background: #a8dadc; color: #cdeeee; padding: 4px 8px; border: 0; cursor: pointer; font-size: 11px; }
+  .tiny { font-size: 10px; color: #b0b0b0; }
+  .cookie { position: fixed; left: 0; right: 0; bottom: 0; background: #333; color: #777; padding: 14px 24px; font-size: 11px; }
+  .x { background: none; border: 0; color: #888; cursor: pointer; }
+  form div { margin: 8px 0; }
+  input { padding: 3px; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="logo"></div>
+    <a href="#a">Asuminen</a><a href="#b">Koulutus</a><a href="#c">Terveys</a><a href="#d">Liikenne</a>
+    <a href="#e"><img src="search.png" width="16" height="16"></a>
+  </div>
+  <div class="hero"><h1>Asumistuen hakeminen</h1></div>
+  <div class="wrap">
+    <div class="content">
+      <p>Asumistuki on Kelan maksama etuus, jonka tarkoituksena on helpottaa pienituloisten kotitalouksien asumismenoja. Etuuden saaminen edellyttää, että hakija täyttää tulo- ja varallisuusedellytykset sekä asuu vakituisesti tuettavassa asunnossa, jonka vuokra ei ylitä kunnan määrittelemiä enimmäisasumismenoja.</p>
+      <p>Hakemus tulee jättää viimeistään sen kuukauden loppuun mennessä, jolta tukea haetaan. Mikäli hakemus jätetään myöhässä, etuutta ei makseta takautuvasti, vaikka kaikki edellytykset täyttyisivätkin jo aiemmin. Hakemukseen on liitettävä vuokrasopimus ja selvitys tuloista kolmen edellisen kuukauden ajalta.</p>
+      <h4>Hakemus</h4>
+      <form>
+        <div><input type="text" placeholder="Nimi"></div>
+        <div><input type="text" placeholder="Henkilötunnus"></div>
+        <div><select><option>Valitse kunta</option><option>Helsinki</option></select></div>
+        <div><span class="btn" onclick="void 0">Lähetä</span> <button class="btn"></button></div>
+      </form>
+      <p class="tiny">Tämä sivu on päivitetty viimeksi 3.9.2026. <a href="#more" style="color:#bbb">click here</a></p>
+      <img src="IMG_2231.jpg" width="320" height="120" style="background:#ddd">
+    </div>
+    <div class="side">
+      <div class="ad">MAINOS: Osta nyt!!!</div>
+      <div class="ad">SUPER TARJOUS</div>
+      <a href="#"><img src="fb.png" width="24" height="24"></a>
+    </div>
+  </div>
+  <div class="cookie">Käytämme evästeitä. <button class="x">✕</button></div>
+</body>
+</html>

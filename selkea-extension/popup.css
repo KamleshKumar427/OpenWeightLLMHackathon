@@ -1,0 +1,162 @@
+:root {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --hair: rgba(0, 0, 0, .1);
+  --fill: #e8e8ed;            /* secondary button / segmented track */
+  --blue: #0071e3;            /* white text on this is 4.8:1 */
+  --blue-ink: #ffffff;
+  --tint: rgba(0, 113, 227, .09);
+  --link: #0066cc;
+  --danger: #c4281c;
+  --warn: #8a5300;
+  --switch-off: #e5e5ea;
+  --switch-edge: #86868b;     /* keeps the off switch visible at 3:1 against the card */
+  --glass: rgba(245, 245, 247, .82);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e;
+    --card: #2c2c2e;
+    --ink: #f5f5f7;
+    --muted: #a1a1a6;
+    --hair: rgba(255, 255, 255, .12);
+    --fill: #3a3a3c;
+    --tint: rgba(41, 151, 255, .18);
+    --link: #2997ff;
+    --danger: #ff8a80;
+    --warn: #ffd60a;
+    --switch-off: #3a3a3c;
+    --switch-edge: #98989d;
+    --glass: rgba(28, 28, 30, .82);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  width: 380px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.scroll { max-height: 440px; overflow-y: auto; padding-bottom: 8px; }
+:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* header */
+.top { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 20px 4px; }
+h1 { margin: 0; font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.03em; }
+.sub { margin: 4px 0 0; font-size: 15px; color: var(--muted); }
+.gear { width: 36px; height: 36px; margin-top: 2px; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+.gear[aria-expanded="true"] { background: var(--blue); color: var(--blue-ink); }
+
+main { padding: 0 16px; }
+.section { margin: 22px 4px 8px; font-size: 13px; font-weight: 600; letter-spacing: .01em; color: var(--muted); }
+.section.sub-group { margin-top: 14px; font-weight: 500; }
+
+/* tiles: big boxes you can tap anywhere on */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tile { position: relative; display: block; }
+.tile input { position: absolute; inset: 0; opacity: 0; margin: 0; width: 100%; height: 100%; cursor: pointer; z-index: 1; }
+.tile .face {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 56px; padding: 8px 12px 8px 14px; border-radius: 14px;
+  background: var(--card); box-shadow: 0 0 0 1px var(--hair);
+  font-size: 14px; font-weight: 500; line-height: 1.25;
+  transition: background-color .15s ease, box-shadow .15s ease;
+}
+.tile .mark {
+  flex: none; position: relative; width: 22px; height: 22px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--switch-edge); transition: background-color .15s ease, box-shadow .15s ease;
+}
+.tile .mark::after {
+  content: ""; position: absolute; left: 7px; top: 3.5px; width: 5px; height: 10px;
+  border: solid var(--blue-ink); border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .15s ease;
+}
+.tile input:checked + .face { background: var(--tint); box-shadow: 0 0 0 2px var(--blue); font-weight: 600; }
+.tile input:checked + .face .mark { background: var(--blue); box-shadow: none; }
+.tile input:checked + .face .mark::after { transform: rotate(45deg) scale(1); }
+.tile:hover .face { box-shadow: 0 0 0 1.5px var(--blue); }
+.tile input:focus-visible + .face { outline: 3px solid var(--blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .tile .face, .tile .mark, .tile .mark::after { transition: none; } }
+
+/* inset grouped lists */
+.list { background: var(--card); border-radius: 12px; overflow: hidden; }
+.row { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; padding: 0 16px; cursor: pointer; }
+.row + .row::before { content: ""; position: absolute; left: 16px; right: 0; top: 0; height: 1px; background: var(--hair); }
+.row-label { font-size: 15px; }
+
+.switch {
+  appearance: none; -webkit-appearance: none; flex: none; position: relative;
+  width: 46px; height: 28px; margin: 0; border-radius: 14px; cursor: pointer;
+  background: var(--switch-off); box-shadow: inset 0 0 0 1.5px var(--switch-edge);
+  transition: background-color .2s ease, box-shadow .2s ease;
+}
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); transition: transform .2s ease;
+}
+.switch:checked { background: var(--blue); box-shadow: none; }
+.switch:checked::after { transform: translateX(18px); }
+.switch:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
+
+/* segmented control */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; border-radius: 10px; background: var(--fill); }
+.seg label { position: relative; text-align: center; }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; width: 100%; height: 100%; cursor: pointer; }
+.seg span { display: block; padding: 7px 4px; border-radius: 8px; font-size: 14px; font-weight: 500; }
+.seg input:checked + span { background: var(--card); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .18), 0 0 0 .5px var(--hair); }
+.seg input:focus-visible + span { outline: 3px solid var(--blue); outline-offset: 1px; }
+
+/* text inputs */
+textarea, .field input, .field select {
+  width: 100%; border: 0; background: transparent; color: var(--ink); font: inherit; resize: none; outline: none;
+}
+textarea { display: block; padding: 12px 16px; min-height: 82px; }
+textarea::placeholder, .field input::placeholder { color: var(--muted); opacity: 1; }
+textarea:focus-visible, .field input:focus-visible, .field select:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; border-radius: 12px; }
+
+/* settings */
+.settings { margin: 14px 16px 0; }
+.field-group { background: var(--card); border-radius: 12px; overflow: hidden; }
+.field { position: relative; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 16px; }
+.field + .field::before { content: ""; position: absolute; left: 16px; right: 0; top: 0; height: 1px; background: var(--hair); }
+.field-group .row::before { content: ""; position: absolute; left: 16px; right: 0; top: 0; height: 1px; background: var(--hair); }
+.field span { flex: none; width: 78px; font-size: 15px; color: var(--muted); }
+.field input, .field select { text-align: right; text-overflow: ellipsis; font-size: 15px; min-width: 0; }
+.field select { text-align-last: right; }
+.note { margin: 8px 6px 0; min-height: 18px; font-size: 13px; color: var(--muted); }
+.note.error { color: var(--danger); }
+
+/* bottom bar */
+.dock {
+  position: sticky; bottom: 0; padding: 10px 16px 14px;
+  background: var(--glass); border-top: 1px solid var(--hair);
+  -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+}
+.status { margin: 0 4px 8px; min-height: 20px; font-size: 13px; color: var(--muted); }
+.status.working::before {
+  content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -2px;
+  border-radius: 50%; border: 2px solid var(--muted); border-top-color: transparent; animation: spin .8s linear infinite;
+}
+.status.error { color: var(--danger); }
+.status.warn { color: var(--warn); }
+.status.done { color: var(--ink); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .status.working::before { animation: none; } }
+
+.btn-row { display: flex; gap: 8px; }
+.btn { height: 48px; padding: 0 18px; border: 0; border-radius: 14px; font: 600 15px -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; cursor: pointer; transition: opacity .15s ease; }
+.btn:active { opacity: .75; }
+.btn.primary { flex: 1; background: var(--blue); color: var(--blue-ink); }
+.btn.primary.stop { background: var(--fill); color: var(--ink); }
+.btn.secondary { background: var(--fill); color: var(--ink); }
+.settings .btn-row { margin-top: 10px; }
+.settings .btn { flex: 1; height: 44px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.count { margin: 8px 4px 0; font-size: 12px; color: var(--muted); text-align: center; }
