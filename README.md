@@ -7,7 +7,7 @@ Selkeä ("clear" in Finnish) is a Chrome extension. You pick who you are (low vi
 
 ## Presentation
 
-**[Open the live presentation](https://iftekhar-ifat.github.io/lumi-ai-hackathon/)**
+**[Open the live presentation](https://kamleshkumar427.github.io/selkea-presentation/)**
 Arrow keys to move, `F` for fullscreen, `N` for speaker notes. You can also open `presentation/index.html` straight from this repo in a browser. It is one self-contained file with no build step.
 
 <p>
