@@ -1,5 +1,96 @@
 // Shared by popup.js (to draw the UI) and background.js (to build the prompt).
 // The `needs` / `hint` strings are written for the model, not for the user.
+// Small network helpers shared by the panel and the service worker.
+const SELKEA_NET = {
+  hostOf(url) {
+    try { return new URL(url).host; } catch (_) { return ""; }
+  },
+  // Credentials are keyed by hostname only, so the hackathon key covers every port on that machine.
+  keyHost(url) {
+    try { return new URL(url).hostname; } catch (_) { return ""; }
+  },
+  isAitta(url) {
+    return /(^|\.)aitta-api\.csc\.fi$/.test(this.keyHost(url));
+  },
+  // People paste tokens with a "Bearer " prefix, quotes, or a line break in the middle. None of
+  // that belongs in the token, and any of it makes the server answer "invalid token".
+  cleanToken(t) {
+    return String(t || "")
+      .replace(/^\s*(authorization:\s*)?bearer\s+/i, "")
+      .replace(/["'\s]+/g, "");
+  },
+  // Context windows we know for certain, used when the Context setting is empty. Poro-2-70B is
+  // fine-tuned at 8192 tokens (Hugging Face model card).
+  knownContext(model) {
+    return { "LumiOpen/Llama-Poro-2-70B-Instruct": 8192 }[String(model).trim()] || 0;
+  },
+  // Aitta writes model ids in URLs with "~" instead of "/".
+  modelPath(id) {
+    return String(id).replace(/\//g, "~");
+  },
+};
+
+// Default prices, per 1M tokens, so nobody has to type any. "aitta" is a rate read off the Aitta web
+// UI (GPU-hours, which only shows after login). "estimate" is a public USD list price for the same
+// model, used where Aitta's own rate is not available; the panel marks those with a tilde.
+const SELKEA_PRICES = {
+  "Qwen/Qwen3-Coder-Next":              { in: 0.23, out: 7.76, unit: "GPU-h", kind: "aitta",    note: "Aitta rate" },
+  "Qwen/Qwen3.6-27B":                   { in: 0.25, out: 2.0,  unit: "$",     kind: "estimate", note: "OpenRouter list price" },
+  "Qwen/Qwen3.8-27B":                   { in: 0.45, out: 3.2,  unit: "$",     kind: "estimate", note: "Alibaba Cloud list price" },
+  "openai/gpt-oss-120b":                { in: 0.15, out: 0.6,  unit: "$",     kind: "estimate", note: "OpenRouter list price" },
+  "LumiOpen/Llama-Poro-2-70B-Instruct": { in: 0.2,  out: 0.2,  unit: "$",     kind: "estimate", note: "typical 70B Llama price (Poro has no public price)" },
+};
+const SELKEA_FREE_HOSTS = ["86.50.168.167"]; // the hackathon's own servers
+
+const SELKEA_PRICE = {
+  // The price to use for these settings: a typed override, else free for the hackathon servers,
+  // else the table above, else null (unknown).
+  resolve(s) {
+    if (s.priceOverride) {
+      return { in: Number(s.priceIn) || 0, out: Number(s.priceOut) || 0, unit: (s.priceUnit || "").trim() || "units", kind: "custom", note: "your own price" };
+    }
+    if (SELKEA_FREE_HOSTS.includes(SELKEA_NET.keyHost(s.baseUrl))) {
+      return { in: 0, out: 0, unit: "", kind: "free", note: "hackathon server" };
+    }
+    const p = SELKEA_PRICES[String(s.model).trim()];
+    return p ? { ...p } : null;
+  },
+};
+
+// Number and cost formatting shared by the panel and the service worker.
+const SELKEA_FMT = {
+  n: (x) => Math.round(x).toLocaleString("en-US"),
+  num(x) {
+    if (!x) return "0";
+    if (x < 0.0001) return "<0.0001";
+    return x.toFixed(x < 0.01 ? 5 : x < 1 ? 4 : 2).replace(/0+$/, "").replace(/\.$/, "");
+  },
+  // One price for a run: "Free", "≈ $0.0043", "0.0236 GPU-h" or "price unknown".
+  price(u) {
+    if (u.kind === "free") return "Free";
+    if (!u.priced) return "price unknown";
+    const tilde = u.kind === "estimate" || u.estimated ? "≈ " : "";
+    const cost = this.num(u.cost);
+    if (u.unit === "$") return `${tilde}${cost.startsWith("<") ? "<$" + cost.slice(1) : "$" + cost}`;
+    return `${tilde}${cost} ${u.unit}`;
+  },
+  // "9,120 in · 1,850 out · ≈ $0.0043"
+  runText(u) {
+    return `${this.n(u.input)} in · ${this.n(u.output)} out · ${this.price(u)}`;
+  },
+  totalText(t) {
+    const costs = Object.entries(t.cost || {})
+      .filter(([, v]) => v > 0)
+      .map(([unit, v]) => (unit === "$" ? `≈ $${this.num(v)}` : `${this.num(v)} ${unit}`));
+    return [
+      `${t.runs} run${t.runs === 1 ? "" : "s"}`,
+      `${this.n(t.input)} in`,
+      `${this.n(t.output)} out`,
+      costs.length ? costs.join(" + ") : "free or unpriced",
+    ].join(" · ");
+  },
+};
+
 const SELKEA = {
   profiles: [
     {
@@ -71,6 +162,8 @@ const SELKEA = {
       hint: "Underline all links and make them stand out by more than colour." },
     { id: "reading", group: "read", label: "Reading column",
       hint: "One readable column about 65 characters wide, centred, generous margins; sidebars de-emphasised." },
+    { id: "bionic", group: "read", label: "Bionic reading",
+      hint: "The extension itself bolds the first part of every word in paragraphs, after all your changes. Do not do this yourself in CSS or in rewrites." },
     { id: "plain", group: "read", label: "Plain language",
       hint: "Rewrite the page text in short, simple sentences without changing the meaning." },
     { id: "explain", group: "read", label: "Explain hard words",

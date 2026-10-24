@@ -35,16 +35,20 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; }
+html, body { margin: 0; height: 100%; }
 body {
-  width: 380px;
+  min-width: 300px;
   background: var(--bg);
   color: var(--ink);
   font: 400 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.scroll { max-height: 440px; overflow-y: auto; padding-bottom: 8px; }
+/* The side panel is as tall as the window: scrolling content on top, action bar pinned below. */
+.app { display: flex; flex-direction: column; height: 100%; }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 12px; }
 :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+/* Our grid/flex rules would otherwise beat the browser's own hidden rule. */
+[hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* header */
@@ -53,6 +57,14 @@ h1 { margin: 0; font-size: 30px; line-height: 1.1; font-weight: 700; letter-spac
 .sub { margin: 4px 0 0; font-size: 15px; color: var(--muted); }
 .gear { width: 36px; height: 36px; margin-top: 2px; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
 .gear[aria-expanded="true"] { background: var(--blue); color: var(--blue-ink); }
+
+/* which tab we are working on, and which model answers */
+.site { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 20px 0; font-size: 13px; color: var(--muted); }
+.site-icon { border-radius: 4px; flex: none; }
+.site-text { min-width: 0; }
+.site-text strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.model-line { margin-left: auto; padding: 2px 8px; border-radius: 10px; background: var(--fill); font-size: 12px; font-variant-numeric: tabular-nums; }
+.model-line:empty { display: none; }
 
 main { padding: 0 16px; }
 .section { margin: 22px 4px 8px; font-size: 13px; font-weight: 600; letter-spacing: .01em; color: var(--muted); }
@@ -128,10 +140,51 @@ textarea:focus-visible, .field input:focus-visible, .field select:focus-visible 
 .field + .field::before { content: ""; position: absolute; left: 16px; right: 0; top: 0; height: 1px; background: var(--hair); }
 .field-group .row::before { content: ""; position: absolute; left: 16px; right: 0; top: 0; height: 1px; background: var(--hair); }
 .field span { flex: none; width: 78px; font-size: 15px; color: var(--muted); }
+.field input[type=number] { -moz-appearance: textfield; }
+.field input[type=number]::-webkit-outer-spin-button, .field input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* results of the last run */
+.results { margin: 14px 16px 0; display: grid; gap: 10px; }
+.card { background: var(--card); border-radius: 14px; box-shadow: 0 0 0 1px var(--hair); padding: 14px 16px; }
+.report-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.report-title { margin: 0; font-size: 15px; font-weight: 600; }
+.report-sub { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.report-score { margin: 0; flex: none; font-size: 26px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar { height: 6px; margin: 12px 0 4px; border-radius: 3px; background: var(--fill); overflow: hidden; }
+.bar span { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--blue); transition: width .6s ease; }
+@media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+.report-rows { margin: 8px 0 0; padding: 0; list-style: none; }
+.report-rows li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 14px; box-shadow: inset 0 1px 0 var(--hair); }
+.report-rows li:first-child { box-shadow: none; }
+.report-rows .rv { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.report-rows .rv b { color: var(--ink); font-weight: 600; }
+.fine { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+
+/* the one price for this run */
+.cost-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.cost-label { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+.cost-big { margin: 0; font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; text-align: right; }
+.cost-tokens { margin: 6px 0 0; font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.total-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.total-line:has(#costTotal:empty) { display: none; }
+
+.price-line { margin: 10px 6px 0; font-size: 13px; color: var(--ink); }
+.advanced { margin-top: 14px; }
+.advanced summary { cursor: pointer; padding: 6px 4px; font-size: 14px; font-weight: 600; color: var(--link); list-style: none; }
+.advanced summary::-webkit-details-marker { display: none; }
+.advanced summary::before { content: "›"; display: inline-block; margin-right: 6px; transition: transform .15s ease; }
+.advanced[open] summary::before { transform: rotate(90deg); }
+.advanced summary:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; border-radius: 6px; }
+.advanced .field-group { margin-top: 8px; }
+@media (prefers-reduced-motion: reduce) { .advanced summary::before { transition: none; } }
+.link-btn { margin: 4px 0 0; padding: 0; border: 0; background: none; color: var(--link); font: 500 12px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; cursor: pointer; }
+.link-btn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
 .field input, .field select { text-align: right; text-overflow: ellipsis; font-size: 15px; min-width: 0; }
 .field select { text-align-last: right; }
 .note { margin: 8px 6px 0; min-height: 18px; font-size: 13px; color: var(--muted); }
 .note.error { color: var(--danger); }
+
+.compare { grid-template-columns: repeat(2, 1fr); margin: 0 0 10px; }
 
 /* bottom bar */
 .dock {

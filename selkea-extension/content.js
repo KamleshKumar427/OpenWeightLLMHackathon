@@ -4,7 +4,11 @@
 
 (() => {
   if (window.__selkea) return;
-  const S = (window.__selkea = { undo: [], hasIds: false });
+  // Every change to the page is recorded as an undo/redo pair. Undo restores the original page,
+  // and redo puts the adapted page back, which is how "Original / Adapted" flips without any
+  // new model call.
+  const S = (window.__selkea = { ops: [], hasIds: false, peeking: false });
+  const op = (undo, redo) => S.ops.push({ undo, redo });
 
   // ------------------------------------------------------------ snapshot
 
@@ -73,12 +77,14 @@
     return `<${t}${attrs}>${inner.trim()}</${t}>`;
   }
 
-  function snapshotHtml() {
-    for (const limit of [400, 160, 80, 40]) {
+  // Shrink the text limit per node until the snapshot fits. Small models (8k tokens) get a much
+  // smaller budget than the 262k ones, so the caller passes the limit in.
+  function snapshotHtml(maxChars = MAX_HTML_CHARS) {
+    for (const limit of [400, 160, 80, 40, 20]) {
       const html = serialize(document.body, limit);
-      if (html.length <= MAX_HTML_CHARS) return html;
+      if (html.length <= maxChars) return html;
     }
-    return serialize(document.body, 40).slice(0, MAX_HTML_CHARS) + "<!-- truncated -->";
+    return serialize(document.body, 20).slice(0, maxChars) + "<!-- truncated -->";
   }
 
   // ------------------------------------------------------------ measurements
@@ -133,7 +139,7 @@
     return { bg, hasImage };
   }
 
-  function digest() {
+  function digest(maxFails = 50) {
     const seen = new Set();
     const fails = [];
     const sizes = new Map();
@@ -167,7 +173,7 @@
       baseFontPx: parseFloat(getComputedStyle(document.body).fontSize),
       textElements: visited,
       lowContrastCount: fails.length,
-      lowContrast: fails.slice(0, 50),
+      lowContrast: fails.slice(0, maxFails),
       fontSizes: [...sizes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([px, n]) => ({ px, n })),
       imagesWithoutAlt: vis(document.querySelectorAll("img:not([alt])")).length,
       linksWithoutName: vis(document.querySelectorAll("a[href]")).filter((a) => !name(a)).length,
@@ -202,14 +208,14 @@
     return out;
   }
 
-  function capture() {
+  function capture(budget = {}) {
     if (!document.body) throw new Error("This page has no body to adapt.");
     assignIds();
     return {
       url: location.origin + location.pathname,
       title: document.title.slice(0, 120),
-      html: snapshotHtml(),
-      digest: digest(),
+      html: snapshotHtml(Math.min(budget.maxChars || MAX_HTML_CHARS, MAX_HTML_CHARS)),
+      digest: digest(budget.maxFails || 50),
       blocks: collectBlocks(),
     };
   }
@@ -292,8 +298,12 @@
     if (name === "id" && !/^[\w-]{1,40}$/.test(value)) return false;
     if (name === "role" && !ROLES.has(value)) return false;
     const prev = el.getAttribute(name);
-    el.setAttribute(name, value.slice(0, 300));
-    S.undo.push(() => (prev === null ? el.removeAttribute(name) : el.setAttribute(name, prev)));
+    const next = value.slice(0, 300);
+    el.setAttribute(name, next);
+    op(
+      () => (prev === null ? el.removeAttribute(name) : el.setAttribute(name, prev)),
+      () => el.setAttribute(name, next)
+    );
     return true;
   }
 
@@ -302,7 +312,7 @@
     if (!/^(alt|title|role|tabindex|aria-[a-z]+)$/.test(name) || !el.hasAttribute(name)) return false;
     const prev = el.getAttribute(name);
     el.removeAttribute(name);
-    S.undo.push(() => el.setAttribute(name, prev));
+    op(() => el.setAttribute(name, prev), () => el.removeAttribute(name));
     return true;
   }
 
@@ -313,14 +323,24 @@
     return share < 0.6;
   }
 
-  function applyPatch(p) {
+  // A short highlight so people can see what just changed. Skipped for anyone who asked for calm.
+  function flashEl(el, on) {
+    if (!on) return;
+    el.setAttribute("data-selkea-flash", "");
+    setTimeout(() => el.removeAttribute("data-selkea-flash"), 2000);
+  }
+
+  function applyPatch(p, flash) {
     const stats = { attributes: 0, hidden: 0, inserted: 0, skipped: 0 };
 
     if (p.lang && /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/.test(p.lang)) {
       const root = document.documentElement;
       const prev = root.getAttribute("lang");
       root.setAttribute("lang", p.lang);
-      S.undo.push(() => (prev === null ? root.removeAttribute("lang") : root.setAttribute("lang", prev)));
+      op(
+        () => (prev === null ? root.removeAttribute("lang") : root.setAttribute("lang", prev)),
+        () => root.setAttribute("lang", p.lang)
+      );
       stats.attributes++;
     }
 
@@ -335,8 +355,15 @@
       const el = byId(id);
       if (!el || !safeToHide(el)) { stats.skipped++; continue; }
       const prev = el.getAttribute("style");
-      el.style.setProperty("display", "none", "important");
-      S.undo.push(() => (prev === null ? el.removeAttribute("style") : el.setAttribute("style", prev)));
+      const hide = () => el.style.setProperty("display", "none", "important");
+      const unhide = () => {
+        if (prev !== null) return el.setAttribute("style", prev);
+        el.removeAttribute("style");
+        // Chrome can re-create an empty style="" on the next style recalculation; drop it too.
+        setTimeout(() => el.getAttribute("style") === "" && el.removeAttribute("style"), 60);
+      };
+      hide();
+      op(unhide, hide);
       stats.hidden++;
     }
 
@@ -347,28 +374,33 @@
       nodes.forEach((n) => n.setAttribute("data-selkea-inserted", ""));
       const where = String(ins.where || "");
       const target = ins.target ? byId(ins.target) : null;
-      if (where === "body-start") document.body.prepend(frag);
-      else if (where === "body-end") document.body.append(frag);
-      else if (where === "before" && target) target.before(frag);
-      else if (where === "after" && target) target.after(frag);
+      let place;
+      if (where === "body-start") place = (f) => document.body.prepend(f);
+      else if (where === "body-end") place = (f) => document.body.append(f);
+      else if (where === "before" && target) place = (f) => target.before(f);
+      else if (where === "after" && target) place = (f) => target.after(f);
       else { stats.skipped++; continue; }
-      S.undo.push(() => nodes.forEach((n) => n.remove()));
+      place(frag);
+      nodes.forEach((n) => flashEl(n, flash));
+      op(
+        () => nodes.forEach((n) => n.remove()),
+        () => { const f = document.createDocumentFragment(); f.append(...nodes); place(f); }
+      );
       stats.inserted++;
     }
 
     if (p.pause_media) {
       document.querySelectorAll("video,audio").forEach((m) => {
         const hadAutoplay = m.hasAttribute("autoplay");
-        m.pause();
-        m.removeAttribute("autoplay");
-        m.autoplay = false;
-        S.undo.push(() => hadAutoplay && m.setAttribute("autoplay", ""));
+        const stop = () => { m.pause(); m.removeAttribute("autoplay"); m.autoplay = false; };
+        stop();
+        op(() => hadAutoplay && m.setAttribute("autoplay", ""), stop);
       });
     }
     return stats;
   }
 
-  function applyRewrite(items) {
+  function applyRewrite(items, flash) {
     let changed = 0, skipped = 0;
     for (const it of Array.isArray(items) ? items : []) {
       const el = it && typeof it.html === "string" ? byId(it.id) : null;
@@ -376,17 +408,85 @@
       const frag = cleanFragment(it.html);
       if (!frag.textContent.trim()) { skipped++; continue; }
       const old = [...el.childNodes];
+      const added = [...frag.childNodes];
       el.replaceChildren(frag);
-      S.undo.push(() => el.replaceChildren(...old));
+      flashEl(el, flash);
+      op(() => el.replaceChildren(...old), () => el.replaceChildren(...added));
       changed++;
     }
     return { changed, skipped };
   }
 
-  function revert() {
-    while (S.undo.length) {
-      try { S.undo.pop()(); } catch (_) {}
+  // Bionic reading: bold the first part of each word so the eye can skim along the line.
+  // Pure text transform, no model involved. Only reading text is touched, not menus,
+  // headings, code or form controls.
+  const BIONIC_BLOCKS = "p,li,blockquote,dd,dt,figcaption,td,th";
+  const BIONIC_SKIP = "nav,pre,code,kbd,samp,textarea,script,style,noscript,select,option,button,h1,h2,h3,h4,h5,h6,b,strong,[contenteditable],#selkea-pill-host";
+  const WORD = /\p{L}[\p{L}\p{M}'’]*/gu;
+
+  function applyBionic() {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        if (!/\p{L}/u.test(n.nodeValue)) return NodeFilter.FILTER_REJECT;
+        const p = n.parentElement;
+        if (!p || p.closest(BIONIC_SKIP) || !p.closest(BIONIC_BLOCKS)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const nodes = [];
+    for (let n; (n = walker.nextNode()) && nodes.length < 30000; ) nodes.push(n);
+
+    const records = [];
+    let words = 0;
+    for (const node of nodes) {
+      if (!isVisible(node.parentElement)) continue;
+      const text = node.nodeValue;
+      const frag = document.createDocumentFragment();
+      let last = 0, m, hits = 0;
+      WORD.lastIndex = 0;
+      while ((m = WORD.exec(text))) {
+        const chars = [...m[0]];
+        const k = chars.length <= 3 ? 1 : Math.ceil(chars.length * 0.45);
+        if (m.index > last) frag.append(text.slice(last, m.index));
+        const b = document.createElement("b");
+        b.setAttribute("data-selkea-bionic", "");
+        b.textContent = chars.slice(0, k).join("");
+        frag.append(b);
+        if (chars.length > k) frag.append(chars.slice(k).join(""));
+        last = m.index + m[0].length;
+        hits++;
+      }
+      if (!hits) continue;
+      words += hits;
+      if (last < text.length) frag.append(text.slice(last));
+      const inserted = [...frag.childNodes];
+      node.replaceWith(frag);
+      records.push({ node, inserted });
     }
+    op(
+      () => {
+        for (const { node, inserted } of records) {
+          inserted[0]?.before(node);
+          inserted.forEach((x) => x.remove());
+        }
+      },
+      () => {
+        for (const { node, inserted } of records) node.replaceWith(...inserted);
+      }
+    );
+    return { words, nodes: records.length };
+  }
+
+  // Undo everything and forget it. If the page is currently showing the original, the
+  // changes are already undone, so only the bookkeeping is cleared.
+  function revert() {
+    if (!S.peeking) {
+      for (let i = S.ops.length - 1; i >= 0; i--) {
+        try { S.ops[i].undo(); } catch (_) {}
+      }
+    }
+    S.ops = [];
+    S.peeking = false;
     document.querySelectorAll("[data-selkea-inserted]").forEach((n) => n.remove());
     if (S.hasIds) {
       document.querySelectorAll("[data-a11y-id]").forEach((n) => n.removeAttribute("data-a11y-id"));
@@ -395,7 +495,31 @@
     return { ok: true };
   }
 
+  // Flip between the original page and the adapted one. The stylesheet half of this is done by
+  // the service worker; this is the DOM half.
+  function compare(original) {
+    if (original && !S.peeking) {
+      for (let i = S.ops.length - 1; i >= 0; i--) {
+        try { S.ops[i].undo(); } catch (_) {}
+      }
+      S.peeking = true;
+    } else if (!original && S.peeking) {
+      for (const o of S.ops) {
+        try { o.redo(); } catch (_) {}
+      }
+      S.peeking = false;
+    }
+    syncCompareLabel();
+    return { ok: true, original: S.peeking };
+  }
+
   // ------------------------------------------------------------ status pill
+
+  function syncCompareLabel() {
+    const host = document.getElementById("selkea-pill-host");
+    const btn = host?.shadowRoot?.querySelector(".cmp");
+    if (btn) btn.textContent = S.peeking ? "Show adapted" : "Show original";
+  }
 
   let hideTimer;
   function pill(msg) {
@@ -423,6 +547,7 @@
           .pill.error .mark{color:#d70015}
           .pill.warn .mark{color:#b25000}
           .txt{flex:1;min-width:0}
+          .use{display:block;margin-top:4px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
           button{font:600 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;border:0;border-radius:10px;padding:7px 12px;cursor:pointer;background:transparent;color:var(--link)}
           button:hover{background:rgba(127,127,127,.14)}
           button.close{color:var(--muted);padding:7px 9px;font-weight:500}
@@ -432,10 +557,16 @@
         <div class="pill" role="status" aria-live="polite">
           <span class="icon"><span class="spin" part="spin"></span><span class="mark" hidden></span></span>
           <span class="txt"></span>
+          <button class="stopbtn" hidden>Stop</button>
+          <button class="cmp" hidden>Show original</button>
           <button class="undo" hidden>Undo</button>
           <button class="close" aria-label="Dismiss">✕</button>
         </div>`;
       root.querySelector(".undo").addEventListener("click", () => chrome.runtime.sendMessage({ cmd: "revert" }));
+      root.querySelector(".stopbtn").addEventListener("click", () => chrome.runtime.sendMessage({ cmd: "cancel" }));
+      root.querySelector(".cmp").addEventListener("click", () =>
+        chrome.runtime.sendMessage({ cmd: "compare", original: !S.peeking })
+      );
       root.querySelector(".close").addEventListener("click", () => host.remove());
       document.documentElement.appendChild(host);
     }
@@ -448,8 +579,19 @@
     const mark = root.querySelector(".mark");
     mark.hidden = working;
     mark.textContent = msg.state === "error" ? "⚠" : "✓";
-    root.querySelector(".txt").textContent = working ? msg.step : msg.message || "";
-    root.querySelector(".undo").hidden = !(msg.state === "done");
+    const txt = root.querySelector(".txt");
+    txt.textContent = working ? msg.step : msg.message || "";
+    if (msg.usageText) {
+      const use = document.createElement("span");
+      use.className = "use";
+      use.textContent = (working ? "So far · " : "Total · ") + msg.usageText;
+      txt.append(use);
+    }
+    root.querySelector(".stopbtn").hidden = !working;
+    const done = msg.state === "done";
+    root.querySelector(".undo").hidden = !done;
+    root.querySelector(".cmp").hidden = !(done && S.ops.length > 0);
+    syncCompareLabel();
     clearTimeout(hideTimer);
     if (msg.state === "idle") hideTimer = setTimeout(() => host.remove(), 2500);
   }
@@ -459,10 +601,12 @@
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     try {
       switch (msg.cmd) {
-        case "capture": sendResponse(capture()); break;
+        case "capture": sendResponse(capture(msg.budget)); break;
         case "measure": assignIds(); sendResponse(digest()); break;
-        case "apply": sendResponse(applyPatch(msg.patch)); break;
-        case "rewrite": sendResponse(applyRewrite(msg.items)); break;
+        case "apply": sendResponse(applyPatch(msg.patch, msg.flash)); break;
+        case "rewrite": sendResponse(applyRewrite(msg.items, msg.flash)); break;
+        case "compare": sendResponse(compare(msg.original)); break;
+        case "bionic": sendResponse(applyBionic()); break;
         case "revert": sendResponse(revert()); break;
         case "pill": pill(msg); sendResponse({ ok: true }); break;
       }

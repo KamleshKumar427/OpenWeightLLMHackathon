@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Selkeä</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div class="app">
+    <div class="scroll">
+      <header class="top">
+        <div>
+          <h1>Selkeä</h1>
+          <p class="sub">Make this page work for you.</p>
+        </div>
+        <button id="gear" class="gear" type="button" aria-label="Model settings" aria-expanded="false" aria-controls="settings">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="site" aria-live="polite">
+        <img id="siteIcon" class="site-icon" alt="" width="16" height="16" hidden>
+        <span class="site-text"><span class="site-label">Adapting</span> <strong id="siteName">this tab</strong></span>
+        <span id="modelLine" class="model-line"></span>
+      </div>
+
+      <section id="settings" class="settings" hidden aria-label="Model settings">
+        <div class="field-group">
+          <label class="field"><span>Model</span>
+            <select id="preset">
+              <option value="">Custom (see Advanced)</option>
+              <option value="h200">Hackathon H200 · Qwen3.8-27B-FP8</option>
+              <option value="a100">Hackathon A100 · Qwen3.8-27B-FP8</option>
+              <option value="aitta-36">LUMI Aitta · Qwen3.6-27B</option>
+              <option value="aitta-38">LUMI Aitta · Qwen3.8-27B</option>
+              <option value="aitta-coder">LUMI Aitta · Qwen3-Coder-Next</option>
+              <option value="aitta-poro">LUMI Aitta · Llama-Poro-2-70B-Instruct</option>
+              <option value="aitta-oss">LUMI Aitta · gpt-oss-120b</option>
+            </select>
+          </label>
+          <label class="field"><span>Key</span>
+            <input id="apiKey" type="password" spellcheck="false" autocomplete="off" placeholder="Key for this server">
+          </label>
+        </div>
+        <p id="keyHint" class="note"></p>
+        <p id="priceLine" class="price-line"></p>
+
+        <div class="btn-row">
+          <button id="testBtn" class="btn secondary" type="button">Test connection</button>
+        </div>
+        <p id="settingsMsg" class="note" role="status"></p>
+
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <div class="field-group">
+            <label class="field"><span>Base URL</span>
+              <input id="baseUrl" type="url" spellcheck="false" autocomplete="off">
+            </label>
+            <label class="field"><span>Model ID</span>
+              <input id="model" type="text" spellcheck="false" autocomplete="off">
+            </label>
+            <label class="field"><span>Context</span>
+              <input id="contextTokens" type="number" min="1024" step="1" inputmode="numeric" placeholder="32768">
+            </label>
+            <label class="row">
+              <span class="row-label">Skip the model's thinking phase</span>
+              <input id="noThink" class="switch" type="checkbox" role="switch">
+            </label>
+          </div>
+          <p class="note">Context is the most tokens the model can read and write in one request. Pages are trimmed to fit it. Llama-Poro-2-70B only has 8192.</p>
+
+          <h3 class="section">Your own prices (optional)</h3>
+          <div class="field-group">
+            <label class="field"><span>Input</span>
+              <input id="priceIn" type="number" min="0" step="any" inputmode="decimal" placeholder="default">
+            </label>
+            <label class="field"><span>Output</span>
+              <input id="priceOut" type="number" min="0" step="any" inputmode="decimal" placeholder="default">
+            </label>
+            <label class="field"><span>Unit</span>
+              <input id="priceUnit" type="text" spellcheck="false" autocomplete="off" placeholder="GPU-h or $">
+            </label>
+          </div>
+          <p class="note">Per 1M tokens. Leave empty to use the model's default price. Fill in both Input and Output to use your own, for example the GPU-hour rates from the Aitta page.</p>
+        </details>
+      </section>
+
+      <section id="results" class="results" hidden aria-label="Results of the last run">
+        <div id="usage" class="card cost" role="group" aria-label="Token usage and cost" hidden>
+          <div class="cost-head">
+            <p id="costLabel" class="cost-label">This run cost</p>
+            <p id="costBig" class="cost-big"></p>
+          </div>
+          <p id="costTokens" class="cost-tokens"></p>
+          <p id="costNote" class="fine"></p>
+          <p class="fine total-line"><span id="costTotal"></span> <button id="usageReset" class="link-btn" type="button">Reset</button></p>
+        </div>
+        <div id="report" class="card report" hidden>
+          <div class="report-head">
+            <div>
+              <h2 class="report-title">Accessibility check</h2>
+              <p id="reportSub" class="report-sub"></p>
+            </div>
+            <p id="reportScore" class="report-score" aria-label="Issues before and after"></p>
+          </div>
+          <div class="bar" aria-hidden="true"><span id="reportBar"></span></div>
+          <ul id="reportRows" class="report-rows"></ul>
+          <p class="fine">Counts only what automated checks can find. A page with no issues can still need a human look.</p>
+        </div>
+
+      </section>
+
+      <main>
+        <h2 class="section" id="h-who">Who is this for</h2>
+        <div id="profiles" class="grid" role="group" aria-labelledby="h-who"></div>
+
+        <h2 class="section" id="h-what">What should change</h2>
+        <div id="options"></div>
+
+        <h2 class="section" id="h-strength">Strength</h2>
+        <div id="intensity" class="seg" role="radiogroup" aria-labelledby="h-strength"></div>
+
+        <h2 class="section" id="h-else">Anything else</h2>
+        <div class="list">
+          <label class="sr-only" for="custom">Describe what you need in your own words</label>
+          <textarea id="custom" rows="3" maxlength="1500"
+            placeholder="Bright backgrounds give me headaches, and I need much bigger buttons. Keep it in Finnish."></textarea>
+        </div>
+      </main>
+    </div>
+
+    <footer class="dock">
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="compare" class="seg compare" role="radiogroup" aria-label="Which version of the page to show" hidden>
+        <label><input type="radio" name="cmp" value="adapted" checked><span>Adapted</span></label>
+        <label><input type="radio" name="cmp" value="original"><span>Original</span></label>
+      </div>
+      <div class="btn-row">
+        <button id="go" class="btn primary" type="button">Make this page accessible</button>
+        <button id="undo" class="btn secondary" type="button">Undo</button>
+      </div>
+      <p id="count" class="count"></p>
+    </footer>
+  </div>
+
+  <script src="catalog.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>
