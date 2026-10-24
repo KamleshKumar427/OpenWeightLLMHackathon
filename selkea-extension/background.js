@@ -4,6 +4,8 @@
 // All model traffic goes through here: content scripts on https pages cannot call
 // plain-http servers, and the API key should never be visible to the page.
 
+// config.local.js is optional (generated from .env). Without it only public endpoints are offered.
+try { importScripts("config.local.js"); } catch (_) {}
 importScripts("catalog.js");
 
 // Clicking the toolbar icon opens the side panel. Unlike a popup, a side panel stays open while
@@ -11,8 +13,8 @@ importScripts("catalog.js");
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => console.warn(e));
 
 const DEFAULT_SETTINGS = {
-  baseUrl: "http://86.50.168.167:9002/v1",
-  model: "Qwen/Qwen3.8-27B-FP8",
+  baseUrl: SELKEA_DEFAULT_SERVER.baseUrl,
+  model: SELKEA_DEFAULT_SERVER.model,
   apiKey: "",
   noThink: true,
   // Price per 1M tokens. Aitta quotes GPU-hours, so the unit is just a label you can change.
@@ -85,7 +87,8 @@ async function getSettings() {
   const s = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   const host = SELKEA_NET.keyHost(s.baseUrl);
   const raw = s.apiKeys ? s.apiKeys[host] : s.apiKey;
-  s.apiKey = SELKEA_NET.cleanToken(raw);
+  // A key typed in Settings wins; otherwise fall back to the one from .env (via config.local.js).
+  s.apiKey = SELKEA_NET.cleanToken(raw || SELKEA_CONFIG.apiKeys[host]);
   return s;
 }
 

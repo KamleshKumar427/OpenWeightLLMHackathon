@@ -2,10 +2,13 @@ const $ = (s) => document.querySelector(s);
 
 // Prices are per 1M tokens. Aitta quotes GPU-hours. An empty price means "unknown": the panel then
 // shows tokens only and says "no price set". 0 means "no charge" (the hackathon's own servers).
-const AITTA = "https://aitta-api.csc.fi/openai/v1";
+const AITTA = SELKEA_AITTA_URL;
+const HACK = SELKEA_CONFIG.hackathon; // null unless .env configures the hackathon servers
 const PRESETS = {
-  h200: { label: "Hackathon H200", baseUrl: "http://86.50.168.167:9002/v1", model: "Qwen/Qwen3.8-27B-FP8", context: 262144 },
-  a100: { label: "Hackathon A100", baseUrl: "http://86.50.168.167:9001/v1", model: "Qwen/Qwen3.8-27B-FP8", context: 262144 },
+  ...(HACK ? {
+    h200: { label: "Hackathon H200", baseUrl: `http://${HACK.host}:${HACK.h200Port}/v1`, model: "Qwen/Qwen3.8-27B-FP8", context: 262144 },
+    a100: { label: "Hackathon A100", baseUrl: `http://${HACK.host}:${HACK.a100Port}/v1`, model: "Qwen/Qwen3.8-27B-FP8", context: 262144 },
+  } : {}),
   "aitta-36": { label: "Aitta Qwen3.6-27B", baseUrl: AITTA, model: "Qwen/Qwen3.6-27B", context: 32768 },
   "aitta-38": { label: "Aitta Qwen3.8-27B", baseUrl: AITTA, model: "Qwen/Qwen3.8-27B", context: 32768 },
   "aitta-coder": { label: "Aitta Qwen3-Coder-Next", baseUrl: AITTA, model: "Qwen/Qwen3-Coder-Next", context: 32768 },
@@ -14,8 +17,8 @@ const PRESETS = {
 };
 
 const DEFAULT_SETTINGS = {
-  baseUrl: PRESETS.h200.baseUrl,
-  model: PRESETS.h200.model,
+  baseUrl: SELKEA_DEFAULT_SERVER.baseUrl,
+  model: SELKEA_DEFAULT_SERVER.model,
   apiKeys: undefined, // host -> key; see keyMap
   apiKey: "",         // legacy single key, migrated into apiKeys
   noThink: true,
@@ -268,7 +271,7 @@ const hostOfField = () => SELKEA_NET.keyHost($("#baseUrl").value.trim());
 
 function effectiveKey(s) {
   const host = SELKEA_NET.keyHost(s.baseUrl);
-  return SELKEA_NET.cleanToken(s.apiKeys ? s.apiKeys[host] : s.apiKey);
+  return SELKEA_NET.cleanToken((s.apiKeys ? s.apiKeys[host] : s.apiKey) || SELKEA_CONFIG.apiKeys[host]);
 }
 
 // Save what is in the key box under the host it was typed for.
@@ -305,7 +308,7 @@ function openSettings() {
 async function keyIsMissing() {
   const s = await getSettings();
   if (effectiveKey(s)) return false;
-  return /aitta-api\.csc\.fi|86\.50\.168\.167/.test(SELKEA_NET.hostOf(s.baseUrl));
+  return SELKEA_NET.isAitta(s.baseUrl) || SELKEA_FREE_HOSTS.includes(SELKEA_NET.keyHost(s.baseUrl));
 }
 
 async function onGo() {
@@ -354,6 +357,8 @@ async function loadSettings() {
   // Migrate the old single key to a per-server key. It belongs to the server that was saved with it.
   keyMap = { ...(s.apiKeys || {}) };
   if (!s.apiKeys && s.apiKey) keyMap[SELKEA_NET.keyHost(s.baseUrl)] = SELKEA_NET.cleanToken(s.apiKey);
+  // Keys from .env fill in only for servers you have not set a key for yet.
+  for (const [h, k] of Object.entries(SELKEA_CONFIG.apiKeys)) if (keyMap[h] === undefined) keyMap[h] = k;
   showKey();
   $("#noThink").checked = s.noThink;
   // Prices are automatic. The fields only hold something if the user typed their own.
@@ -515,6 +520,8 @@ async function init() {
   for (const sel of ["#model", "#priceIn", "#priceOut", "#priceUnit", "#baseUrl"]) {
     $(sel).addEventListener("input", () => { syncPresetSelect(); renderPriceLine(); });
   }
+  // Hide model presets that are not configured here (the hackathon servers need .env).
+  for (const o of [...$("#preset").options]) if (o.value && !PRESETS[o.value]) o.remove();
   await loadSettings();
 
   // Follow the user around: other tab, new page, background updates.

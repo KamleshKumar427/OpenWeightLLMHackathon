@@ -1,0 +1,14 @@
+# secrets and local config, never commit these
+.env
+.env.*
+!.env.example
+selkea-extension/config.local.js
+
+# macOS and build leftovers
+.DS_Store
+*.zip
+node_modules/
+
+# duplicates and backups that do not belong in the repo
+PresentationPicture.jpg
+linkedin/

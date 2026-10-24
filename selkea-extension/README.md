@@ -15,6 +15,8 @@ need, and an open-weight LLM edits the page's HTML and CSS so it works for you.
 Reload the extension on `chrome://extensions` after you edit any file. Reload the page too,
 because content scripts already on the page do not update by themselves.
 
+**Keys and private servers.** Nothing secret lives in this code. Paste keys into the ⚙ Settings panel, or put them in a git-ignored `.env` at the repo root (copy `.env.example`) and run `node scripts/make-config.mjs`. That writes `selkea-extension/config.local.js`, which the extension reads for the hackathon server address and any keys. Without it the extension offers only the public LUMI Aitta models.
+
 **Permissions:** the extension asks for access to all sites because the side panel has to work on
 whichever tab you switch to. Nothing runs on a page until you click the button or use the shortcut,
 and nothing is sent anywhere except the page snapshot to the model server you configured.

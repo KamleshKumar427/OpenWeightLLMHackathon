@@ -1,4 +1,9 @@
-// Shared by popup.js (to draw the UI) and background.js (to build the prompt).
+// Private server details and keys do not live in this code. They come from config.local.js, a file
+// that scripts/make-config.mjs generates from .env and git ignores (see .env.example). Without it
+// the extension still works with the public LUMI Aitta endpoint and keys you paste in Settings.
+var SELKEA_CONFIG = typeof SELKEA_CONFIG !== "undefined" ? SELKEA_CONFIG : { hackathon: null, apiKeys: {} };
+
+// Shared by panel.js (to draw the UI) and background.js (to build the prompt).
 // The `needs` / `hint` strings are written for the model, not for the user.
 // Small network helpers shared by the panel and the service worker.
 const SELKEA_NET = {
@@ -40,7 +45,14 @@ const SELKEA_PRICES = {
   "openai/gpt-oss-120b":                { in: 0.15, out: 0.6,  unit: "$",     kind: "estimate", note: "OpenRouter list price" },
   "LumiOpen/Llama-Poro-2-70B-Instruct": { in: 0.2,  out: 0.2,  unit: "$",     kind: "estimate", note: "typical 70B Llama price (Poro has no public price)" },
 };
-const SELKEA_FREE_HOSTS = ["86.50.168.167"]; // the hackathon's own servers
+const SELKEA_FREE_HOSTS = SELKEA_CONFIG.hackathon ? [SELKEA_CONFIG.hackathon.host] : []; // the hackathon's own servers
+
+const SELKEA_AITTA_URL = "https://aitta-api.csc.fi/openai/v1";
+
+// Where a fresh install points first: the hackathon H200 if it is configured, else public Aitta.
+const SELKEA_DEFAULT_SERVER = SELKEA_CONFIG.hackathon
+  ? { baseUrl: `http://${SELKEA_CONFIG.hackathon.host}:${SELKEA_CONFIG.hackathon.h200Port}/v1`, model: "Qwen/Qwen3.8-27B-FP8" }
+  : { baseUrl: SELKEA_AITTA_URL, model: "Qwen/Qwen3.8-27B" };
 
 const SELKEA_PRICE = {
   // The price to use for these settings: a typed override, else free for the hackathon servers,
